@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Money Manager - Track Your Finances</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div id="app">
+        <!-- Loading Screen -->
+        <div id="loading-screen" class="loading-screen">
+            <div class="loading-spinner"></div>
+            <p>Loading Money Manager...</p>
+        </div>
+
+        <!-- Authentication Section -->
+        <div id="auth-section" class="auth-section hidden">
+            <div class="auth-container">
+                <div class="auth-header">
+                    <h1><i class="fas fa-wallet"></i> Money Manager</h1>
+                    <p>Track your finances with ease</p>
+                </div>
+
+                <!-- Login Form -->
+                <div id="login-form" class="auth-form">
+                    <h2>Welcome Back</h2>
+                    <form id="login-form-element">
+                        <div class="form-group">
+                            <label for="login-username">Username or Email</label>
+                            <input type="text" id="login-username" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="login-password">Password</label>
+                            <input type="password" id="login-password" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-sign-in-alt"></i> Sign In
+                        </button>
+                    </form>
+                    <p class="auth-switch">
+                        Don't have an account? 
+                        <a href="#" id="show-signup">Sign up here</a>
+                    </p>
+                </div>
+
+                <!-- Signup Form -->
+                <div id="signup-form" class="auth-form hidden">
+                    <h2>Create Account</h2>
+                    <form id="signup-form-element">
+                        <div class="form-group">
+                            <label for="signup-username">Username</label>
+                            <input type="text" id="signup-username" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="signup-email">Email</label>
+                            <input type="email" id="signup-email" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="signup-password">Password</label>
+                            <input type="password" id="signup-password" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-user-plus"></i> Create Account
+                        </button>
+                    </form>
+                    <p class="auth-switch">
+                        Already have an account? 
+                        <a href="#" id="show-login">Sign in here</a>
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Application -->
+        <div id="main-app" class="main-app hidden">
+            <!-- Navigation -->
+            <nav class="navbar">
+                <div class="nav-brand">
+                    <i class="fas fa-wallet"></i>
+                    <span>Money Manager</span>
+                </div>
+                <div class="nav-menu">
+                    <button class="nav-item active" data-section="dashboard">
+                        <i class="fas fa-chart-line"></i> Dashboard
+                    </button>
+                    <button class="nav-item" data-section="transactions">
+                        <i class="fas fa-exchange-alt"></i> Transactions
+                    </button>
+                    <button class="nav-item" data-section="reports">
+                        <i class="fas fa-chart-pie"></i> Reports
+                    </button>
+                </div>
+                <div class="nav-user">
+                    <span id="user-name">User</span>
+                    <button id="logout-btn" class="btn btn-outline">
+                        <i class="fas fa-sign-out-alt"></i> Logout
+                    </button>
+                </div>
+            </nav>
+
+            <!-- Dashboard Section -->
+            <section id="dashboard-section" class="content-section active">
+                <div class="container">
+                    <div class="section-header">
+                        <h2>Dashboard</h2>
+                        <p>Overview of your financial status</p>
+                    </div>
+
+                    <!-- Balance Cards -->
+                    <div class="balance-cards">
+                        <div class="balance-card balance">
+                            <div class="card-icon">
+                                <i class="fas fa-wallet"></i>
+                            </div>
+                            <div class="card-content">
+                                <h3>Current Balance</h3>
+                                <p class="amount" id="current-balance">₹0.00</p>
+                            </div>
+                        </div>
+                        <div class="balance-card income">
+                            <div class="card-icon">
+                                <i class="fas fa-arrow-up"></i>
+                            </div>
+                            <div class="card-content">
+                                <h3>Total Income</h3>
+                                <p class="amount" id="total-income">₹0.00</p>
+                            </div>
+                        </div>
+                        <div class="balance-card expense">
+                            <div class="card-icon">
+                                <i class="fas fa-arrow-down"></i>
+                            </div>
+                            <div class="card-content">
+                                <h3>Total Expenses</h3>
+                                <p class="amount" id="total-expense">₹0.00</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quick Actions -->
+                    <div class="quick-actions">
+                        <button class="action-btn income" id="quick-add-income">
+                            <i class="fas fa-plus"></i>
+                            <span>Add Income</span>
+                        </button>
+                        <button class="action-btn expense" id="quick-add-expense">
+                            <i class="fas fa-minus"></i>
+                            <span>Add Expense</span>
+                        </button>
+                    </div>
+
+                    <!-- Recent Transactions -->
+                    <div class="recent-transactions">
+                        <div class="section-title">
+                            <h3>Recent Transactions</h3>
+                            <button class="btn btn-outline" id="view-all-transactions">View All</button>
+                        </div>
+                        <div id="recent-transactions-list" class="transactions-list">
+                            <!-- Transactions will be loaded here -->
+                        </div>
+                    </div>
+
+                    <!-- Spending Chart -->
+                    <div class="chart-container">
+                        <h3>Spending by Category</h3>
+                        <canvas id="spending-chart" width="400" height="200"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Transactions Section -->
+            <section id="transactions-section" class="content-section">
+                <div class="container">
+                    <div class="section-header">
+                        <h2>Transactions</h2>
+                        <button class="btn btn-primary" id="add-transaction-btn">
+                            <i class="fas fa-plus"></i> Add Transaction
+                        </button>
+                    </div>
+
+                    <!-- Filters -->
+                    <div class="filters">
+                        <div class="filter-group">
+                            <label for="filter-type">Type</label>
+                            <select id="filter-type">
+                                <option value="">All Types</option>
+                                <option value="income">Income</option>
+                                <option value="expense">Expense</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label for="filter-category">Category</label>
+                            <select id="filter-category">
+                                <option value="">All Categories</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label for="filter-start-date">Start Date</label>
+                            <input type="date" id="filter-start-date">
+                        </div>
+                        <div class="filter-group">
+                            <label for="filter-end-date">End Date</label>
+                            <input type="date" id="filter-end-date">
+                        </div>
+                        <button class="btn btn-outline" id="apply-filters">Apply Filters</button>
+                        <button class="btn btn-outline" id="clear-filters">Clear</button>
+                    </div>
+
+                    <!-- Transactions List -->
+                    <div id="transactions-list" class="transactions-list">
+                        <!-- Transactions will be loaded here -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Reports Section -->
+            <section id="reports-section" class="content-section">
+                <div class="container">
+                    <div class="section-header">
+                        <h2>Reports & Analytics</h2>
+                        <p>Analyze your spending patterns</p>
+                    </div>
+
+                    <div class="reports-grid">
+                        <div class="report-card">
+                            <h3>Monthly Spending Trend</h3>
+                            <canvas id="monthly-chart" width="400" height="200"></canvas>
+                        </div>
+                        <div class="report-card">
+                            <h3>Category Breakdown</h3>
+                            <canvas id="category-chart" width="400" height="200"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Transaction Modal -->
+        <div id="transaction-modal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 id="modal-title">Add Transaction</h3>
+                    <button class="modal-close" id="close-modal" title="Close" aria-label="Close">
+                        <i class="fas fa-times"></i>
+                        <span class="sr-only">Close</span>
+                    </button>
+                </div>
+                <form id="transaction-form">
+                    <div class="form-group">
+                        <label for="transaction-amount">Amount</label>
+                        <input type="number" id="transaction-amount" step="0.01" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="transaction-type">Type</label>
+                        <select id="transaction-type" required>
+                            <option value="">Select Type</option>
+                            <option value="income">Income</option>
+                            <option value="expense">Expense</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="transaction-category">Category</label>
+                        <select id="transaction-category">
+                            <option value="">Select Category</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="transaction-date">Date</label>
+                        <input type="date" id="transaction-date" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="transaction-description">Description</label>
+                        <textarea id="transaction-description" rows="3"></textarea>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn btn-outline" id="cancel-transaction">Cancel</button>
+                        <button type="submit" class="btn btn-primary" id="save-transaction">Save Transaction</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Error/Success Messages -->
+        <div id="message-container" class="message-container"></div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
+
