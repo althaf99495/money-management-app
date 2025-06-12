@@ -1,8 +1,4 @@
-\
 
-### **Improved `README.md`**
-
-```markdown
 # Money Manager: Personal Finance Tracker
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
