@@ -1,4 +1,4 @@
-from src.models.user import db
+from src.extensions import db # Import db from extensions.py
 from datetime import datetime
 
 class Category(db.Model):
@@ -48,4 +48,3 @@ class Transaction(db.Model):
             'category_id': self.category_id,
             'category_name': self.category.name if self.category else None
         }
-

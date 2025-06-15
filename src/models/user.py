@@ -1,8 +1,8 @@
-from flask_sqlalchemy import SQLAlchemy
+from src.extensions import db # Import db from extensions.py
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 
-db = SQLAlchemy()
+# db = SQLAlchemy() # Moved to main.py
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)

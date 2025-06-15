@@ -1,11 +1,54 @@
-from flask import Blueprint, jsonify, request, session
-from src.models.user import User, db
+from flask import Blueprint, request, Response, jsonify, g, current_app, session
+from src.models.user import User
 from src.models.transaction import Transaction, Category
 from src.routes.auth import login_required
 from datetime import datetime, date
 from sqlalchemy import and_, or_, func
+from src.extensions import db
+import csv
+import io
+from weasyprint import HTML
 
 transaction_bp = Blueprint('transaction', __name__)
+
+# --- Refactored Helper Function ---
+def _get_filtered_transactions_query(user_id):
+    """
+    Returns a SQLAlchemy query object for transactions based on request args.
+    This reduces code duplication across multiple routes.
+    """
+    query = Transaction.query.filter_by(user_id=user_id)
+
+    category_id = request.args.get('category_id', type=int)
+    transaction_type = request.args.get('type')
+    start_date_str = request.args.get('start_date')
+    end_date_str = request.args.get('end_date')
+
+    if category_id:
+        query = query.filter_by(category_id=category_id)
+    
+    if transaction_type and transaction_type in ['income', 'expense']:
+        query = query.filter_by(transaction_type=transaction_type)
+    
+    if start_date_str:
+        try:
+            start_date_obj = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+            query = query.filter(Transaction.date >= start_date_obj)
+        except ValueError:
+            # Silently ignore invalid date format for filtering
+            pass
+    
+    if end_date_str:
+        try:
+            end_date_obj = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+            query = query.filter(Transaction.date <= end_date_obj)
+        except ValueError:
+            # Silently ignore invalid date format
+            pass
+            
+    return query
+
+# --- Routes ---
 
 @transaction_bp.route('/categories', methods=['GET'])
 @login_required
@@ -15,6 +58,7 @@ def get_categories():
         categories = Category.query.all()
         return jsonify([category.to_dict() for category in categories]), 200
     except Exception as e:
+        current_app.logger.error(f"Error getting categories: {e}")
         return jsonify({'error': 'Failed to get categories'}), 500
 
 @transaction_bp.route('/transactions', methods=['GET'])
@@ -23,43 +67,16 @@ def get_transactions():
     """Get user's transactions with optional filtering"""
     try:
         user_id = session['user_id']
-        
-        # Get query parameters for filtering
-        category_id = request.args.get('category_id', type=int)
-        transaction_type = request.args.get('type')
-        start_date = request.args.get('start_date')
-        end_date = request.args.get('end_date')
         limit = request.args.get('limit', 50, type=int)
         
-        # Build query
-        query = Transaction.query.filter_by(user_id=user_id)
+        query = _get_filtered_transactions_query(user_id)
         
-        if category_id:
-            query = query.filter_by(category_id=category_id)
-        
-        if transaction_type and transaction_type in ['income', 'expense']:
-            query = query.filter_by(transaction_type=transaction_type)
-        
-        if start_date:
-            try:
-                start_date_obj = datetime.strptime(start_date, '%Y-%m-%d').date()
-                query = query.filter(Transaction.date >= start_date_obj)
-            except ValueError:
-                return jsonify({'error': 'Invalid start_date format. Use YYYY-MM-DD'}), 400
-        
-        if end_date:
-            try:
-                end_date_obj = datetime.strptime(end_date, '%Y-%m-%d').date()
-                query = query.filter(Transaction.date <= end_date_obj)
-            except ValueError:
-                return jsonify({'error': 'Invalid end_date format. Use YYYY-MM-DD'}), 400
-        
-        # Order by date descending and limit results
         transactions = query.order_by(Transaction.date.desc(), Transaction.created_at.desc()).limit(limit).all()
         
         return jsonify([transaction.to_dict() for transaction in transactions]), 200
         
     except Exception as e:
+        current_app.logger.error(f"Error getting transactions: {e}")
         return jsonify({'error': 'Failed to get transactions'}), 500
 
 @transaction_bp.route('/transactions', methods=['POST'])
@@ -70,7 +87,6 @@ def create_transaction():
         data = request.json
         user_id = session['user_id']
         
-        # Validate required fields
         if not data or not data.get('amount') or not data.get('transaction_type'):
             return jsonify({'error': 'Amount and transaction type are required'}), 400
         
@@ -79,21 +95,17 @@ def create_transaction():
         description = data.get('description', '').strip()
         category_id = data.get('category_id')
         
-        # Validate transaction type
         if transaction_type not in ['income', 'expense']:
             return jsonify({'error': 'Transaction type must be "income" or "expense"'}), 400
         
-        # Validate amount
         if amount <= 0:
             return jsonify({'error': 'Amount must be positive'}), 400
         
-        # Validate category if provided
         if category_id:
             category = Category.query.get(category_id)
             if not category:
                 return jsonify({'error': 'Invalid category ID'}), 400
         
-        # Parse date if provided, otherwise use today
         transaction_date = date.today()
         if data.get('date'):
             try:
@@ -101,7 +113,6 @@ def create_transaction():
             except ValueError:
                 return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD'}), 400
         
-        # Create transaction
         transaction = Transaction(
             amount=amount,
             description=description,
@@ -123,6 +134,7 @@ def create_transaction():
         return jsonify({'error': 'Invalid amount format'}), 400
     except Exception as e:
         db.session.rollback()
+        current_app.logger.error(f"Error creating transaction: {e}")
         return jsonify({'error': 'Failed to create transaction'}), 500
 
 @transaction_bp.route('/transactions/<int:transaction_id>', methods=['GET'])
@@ -139,6 +151,7 @@ def get_transaction(transaction_id):
         return jsonify(transaction.to_dict()), 200
         
     except Exception as e:
+        current_app.logger.error(f"Error getting transaction {transaction_id}: {e}")
         return jsonify({'error': 'Failed to get transaction'}), 500
 
 @transaction_bp.route('/transactions/<int:transaction_id>', methods=['PUT'])
@@ -153,11 +166,9 @@ def update_transaction(transaction_id):
         if not transaction:
             return jsonify({'error': 'Transaction not found'}), 404
         
-        # Update fields if provided
         if 'amount' in data:
             amount = float(data['amount'])
-            if amount <= 0:
-                return jsonify({'error': 'Amount must be positive'}), 400
+            if amount <= 0: return jsonify({'error': 'Amount must be positive'}), 400
             transaction.amount = amount
         
         if 'description' in data:
@@ -165,16 +176,14 @@ def update_transaction(transaction_id):
         
         if 'transaction_type' in data:
             transaction_type = data['transaction_type'].lower()
-            if transaction_type not in ['income', 'expense']:
-                return jsonify({'error': 'Transaction type must be "income" or "expense"'}), 400
+            if transaction_type not in ['income', 'expense']: return jsonify({'error': 'Invalid transaction type'}), 400
             transaction.transaction_type = transaction_type
         
         if 'category_id' in data:
             category_id = data['category_id']
             if category_id:
                 category = Category.query.get(category_id)
-                if not category:
-                    return jsonify({'error': 'Invalid category ID'}), 400
+                if not category: return jsonify({'error': 'Invalid category ID'}), 400
             transaction.category_id = category_id
         
         if 'date' in data:
@@ -194,6 +203,7 @@ def update_transaction(transaction_id):
         return jsonify({'error': 'Invalid amount format'}), 400
     except Exception as e:
         db.session.rollback()
+        current_app.logger.error(f"Error updating transaction {transaction_id}: {e}")
         return jsonify({'error': 'Failed to update transaction'}), 500
 
 @transaction_bp.route('/transactions/<int:transaction_id>', methods=['DELETE'])
@@ -214,6 +224,7 @@ def delete_transaction(transaction_id):
         
     except Exception as e:
         db.session.rollback()
+        current_app.logger.error(f"Error deleting transaction {transaction_id}: {e}")
         return jsonify({'error': 'Failed to delete transaction'}), 500
 
 @transaction_bp.route('/dashboard', methods=['GET'])
@@ -227,12 +238,10 @@ def get_dashboard_data():
         if not user:
             return jsonify({'error': 'User not found'}), 404
         
-        # Get recent transactions (last 10)
         recent_transactions = Transaction.query.filter_by(user_id=user_id)\
             .order_by(Transaction.date.desc(), Transaction.created_at.desc())\
             .limit(10).all()
         
-        # Calculate totals
         total_income = db.session.query(func.sum(Transaction.amount))\
             .filter_by(user_id=user_id, transaction_type='income').scalar() or 0
         
@@ -241,7 +250,6 @@ def get_dashboard_data():
         
         balance = total_income - total_expense
         
-        # Get spending by category (expenses only)
         category_spending = db.session.query(
             Category.name,
             func.sum(Transaction.amount).label('total')
@@ -259,5 +267,134 @@ def get_dashboard_data():
         }), 200
         
     except Exception as e:
+        current_app.logger.error(f"Error getting dashboard data: {e}")
         return jsonify({'error': 'Failed to get dashboard data'}), 500
 
+@transaction_bp.route('/transactions/download/csv', methods=['GET'])
+@login_required
+def download_transactions_csv():
+    """Download user's transactions as a CSV file with optional filtering"""
+    try:
+        user_id = session['user_id']
+        query = _get_filtered_transactions_query(user_id)
+        transactions = query.order_by(Transaction.date.desc(), Transaction.created_at.desc()).all()
+
+        if not transactions:
+            return jsonify({"message": "No transactions found for the selected criteria."}), 404
+
+        total_income_val = sum(t.amount for t in transactions if t.transaction_type == 'income')
+        total_expense_val = sum(t.amount for t in transactions if t.transaction_type == 'expense')
+        net_balance_val = total_income_val - total_expense_val
+
+        output = io.StringIO()
+        csv_writer = csv.writer(output)
+        
+        headers = ['Date', 'Description', 'Amount', 'Type', 'Category']
+        csv_writer.writerow(headers)
+        
+        for t in transactions:
+            category_name = t.category.name if t.category else ''
+            csv_writer.writerow([
+                t.date.strftime('%Y-%m-%d') if t.date else '',
+                t.description,
+                t.amount,
+                t.transaction_type,
+                category_name
+            ])
+        
+        # Add summary rows
+        csv_writer.writerow([]) # Empty row for spacing
+        csv_writer.writerow(['Summary:'])
+        csv_writer.writerow(['Total Income:', f'{total_income_val:.2f}'])
+        csv_writer.writerow(['Total Expenses:', f'{total_expense_val:.2f}'])
+        csv_writer.writerow(['Net Balance:', f'{net_balance_val:.2f}'])
+            
+        output.seek(0)
+        
+        return Response(
+            output.getvalue(),
+            mimetype="text/csv",
+            headers={"Content-Disposition": "attachment;filename=transactions.csv"}
+        )
+        
+    except Exception as e:
+        current_app.logger.error(f"Error downloading CSV: {e}")
+        return jsonify({'error': 'Failed to download transactions as CSV'}), 500
+
+@transaction_bp.route('/transactions/download/pdf', methods=['GET'])
+@login_required
+def download_transactions_pdf():
+    """Download user's transactions as a PDF file with optional filtering"""
+    try:
+        user_id = session['user_id']
+        query = _get_filtered_transactions_query(user_id)
+        transactions = query.order_by(Transaction.date.desc(), Transaction.created_at.desc()).all()
+
+        if not transactions:
+            return jsonify({"message": "No transactions found for the selected criteria."}), 404
+
+        # Calculate totals
+        total_income_val = sum(t.amount for t in transactions if t.transaction_type == 'income')
+        total_expense_val = sum(t.amount for t in transactions if t.transaction_type == 'expense')
+        net_balance_val = total_income_val - total_expense_val
+
+        # Prepare filter information for the header
+        report_date = date.today().strftime('%Y-%m-%d')
+        filters_applied = []
+        start_date_filter = request.args.get('start_date')
+        end_date_filter = request.args.get('end_date')
+        type_filter = request.args.get('type')
+        category_id_filter = request.args.get('category_id', type=int)
+
+        if start_date_filter or end_date_filter:
+            period_str = "All Dates"
+            if start_date_filter and end_date_filter:
+                period_str = f"{start_date_filter} to {end_date_filter}"
+            elif start_date_filter:
+                period_str = f"From {start_date_filter}"
+            elif end_date_filter:
+                period_str = f"Up to {end_date_filter}"
+            filters_applied.append(f"Period: {period_str}")
+        if type_filter:
+            filters_applied.append(f"Type: {type_filter.capitalize()}")
+        if category_id_filter:
+            category_filter_obj = Category.query.get(category_id_filter)
+            if category_filter_obj:
+                filters_applied.append(f"Category: {category_filter_obj.name}")
+
+        filter_html = "<ul>" + "".join(f"<li>{f}</li>" for f in filters_applied) + "</ul>" if filters_applied else "<p>None</p>"
+
+        html_string = f"""<html><head><title>Transaction Report</title>
+<style>body{{font-family:sans-serif; font-size: 10pt;}} 
+h1{{text-align:center;}}
+table{{width:100%; border-collapse:collapse; margin-top: 15px; margin-bottom: 15px;}} 
+th,td{{border:1px solid #ddd; padding:6px; text-align:left;}} 
+th{{background-color: #f2f2f2;}}
+.header-info, .summary-section {{margin-bottom: 20px; padding:10px; border: 1px solid #eee;}}
+.header-info p, .summary-section p {{margin: 5px 0;}}
+</style></head><body>
+<h1>Transaction Report</h1>
+<div class="header-info"><p><strong>Report Generated:</strong> {report_date}</p><p><strong>Filters Applied:</strong></p>{filter_html}</div>
+<table border='1'><tr><th>Date</th><th>Description</th><th>Amount (INR)</th><th>Type</th><th>Category</th></tr>"""
+        for t in transactions:
+            category_name = t.category.name if t.category else ''
+            html_string += f"<tr><td>{t.date.strftime('%Y-%m-%d') if t.date else ''}</td><td>{t.description or ''}</td><td>{t.amount:.2f}</td><td>{t.transaction_type}</td><td>{category_name}</td></tr>"
+        html_string += f"""</table>
+<div class="summary-section"><h3>Summary</h3>
+<p><strong>Total Transactions:</strong> {len(transactions)}</p>
+<p><strong>Total Income:</strong> {total_income_val:.2f} INR</p>
+<p><strong>Total Expenses:</strong> {total_expense_val:.2f} INR</p>
+<p><strong>Net Balance:</strong> {net_balance_val:.2f} INR</p>
+</div></body></html>"""
+
+        pdf_bytes = HTML(string=html_string).write_pdf()
+
+        return Response(
+            pdf_bytes,
+            mimetype="application/pdf",
+            headers={"Content-Disposition": "attachment;filename=transactions.pdf"}
+        )
+
+    except Exception as e:
+        current_app.logger.error(f"Error downloading PDF: {e}")
+        return jsonify({'error': 'Failed to download transactions as PDF'}), 500

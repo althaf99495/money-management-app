@@ -1,39 +1,54 @@
-from flask import Blueprint, jsonify, request
-from src.models.user import User, db
+from flask import Blueprint, jsonify, request, session
+from src.models.user import User
+from src.extensions import db # Import db from extensions.py
+from src.routes.auth import login_required # Import login_required
 
-user_bp = Blueprint('user', __name__)
+user_bp = Blueprint('user', __name__, url_prefix='/user') # Changed url_prefix for clarity
 
-@user_bp.route('/users', methods=['GET'])
-def get_users():
-    users = User.query.all()
-    return jsonify([user.to_dict() for user in users])
+# This blueprint is now for managing the logged-in user's profile.
+# User creation is handled by /api/auth/signup.
 
-@user_bp.route('/users', methods=['POST'])
-def create_user():
+@user_bp.route('/profile', methods=['GET'])
+@login_required
+def get_user_profile():
+    user_id = session['user_id']
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    return jsonify(user.to_dict())
+
+@user_bp.route('/profile', methods=['PUT'])
+@login_required
+def update_user_profile():
+    user_id = session['user_id']
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+
+    data = request.json
     
-    data = request.json
-    user = User(username=data['username'], email=data['email'])
-    db.session.add(user)
-    db.session.commit()
-    return jsonify(user.to_dict()), 201
+    if 'username' in data:
+        new_username = data['username'].strip()
+        if new_username != user.username and User.query.filter_by(username=new_username).first():
+            return jsonify({'error': 'Username already exists'}), 409
+        user.username = new_username
+        session['username'] = new_username # Update session if username changes
+        
+    if 'email' in data:
+        new_email = data['email'].strip().lower()
+        if new_email != user.email and User.query.filter_by(email=new_email).first():
+            return jsonify({'error': 'Email already exists'}), 409
+        user.email = new_email
+    
+    # Password change should be a separate endpoint with current password verification
+    # if 'password' in data: user.set_password(data['password'])
 
-@user_bp.route('/users/<int:user_id>', methods=['GET'])
-def get_user(user_id):
-    user = User.query.get_or_404(user_id)
-    return jsonify(user.to_dict())
+    try:
+        db.session.commit()
+        return jsonify({'message': 'Profile updated successfully', 'user': user.to_dict()}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': 'Failed to update profile'}), 500
 
-@user_bp.route('/users/<int:user_id>', methods=['PUT'])
-def update_user(user_id):
-    user = User.query.get_or_404(user_id)
-    data = request.json
-    user.username = data.get('username', user.username)
-    user.email = data.get('email', user.email)
-    db.session.commit()
-    return jsonify(user.to_dict())
-
-@user_bp.route('/users/<int:user_id>', methods=['DELETE'])
-def delete_user(user_id):
-    user = User.query.get_or_404(user_id)
-    db.session.delete(user)
-    db.session.commit()
-    return '', 204
+# Deleting a user is a sensitive operation, often handled differently (e.g., admin only, or soft delete)
+# For now, this endpoint is removed. User can logout. Full account deletion needs more consideration.

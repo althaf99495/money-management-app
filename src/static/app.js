@@ -6,31 +6,21 @@ class MoneyManager {
         this.categories = [];
         this.transactions = [];
         this.currentEditingTransaction = null;
+        this.currentEditingBudget = null;
+        this.currentEditingRecurring = null; // Added for recurring transactions
         
         this.init();
     }
 
     async init() {
-        // Show loading screen
         this.showLoading();
-        
-        // Check if user is already authenticated
         await this.checkAuth();
-        
-        // Set up event listeners
         this.setupEventListeners();
-        
-        // Hide loading screen
         this.hideLoading();
     }
 
-    showLoading() {
-        document.getElementById('loading-screen').classList.remove('hidden');
-    }
-
-    hideLoading() {
-        document.getElementById('loading-screen').classList.add('hidden');
-    }
+    showLoading() { document.getElementById('loading-screen').classList.remove('hidden'); }
+    hideLoading() { document.getElementById('loading-screen').classList.add('hidden'); }
 
     async checkAuth() {
         try {
@@ -57,175 +47,94 @@ class MoneyManager {
     async showMainApp() {
         document.getElementById('auth-section').classList.add('hidden');
         document.getElementById('main-app').classList.remove('hidden');
-        
-        // Update user name in nav
         document.getElementById('user-name').textContent = this.currentUser.username;
         
-        // Load initial data
         await this.loadCategories();
         await this.loadDashboardData();
         
-        // Show dashboard by default
         this.showSection('dashboard');
     }
 
     setupEventListeners() {
-        // Auth form toggles
-        document.getElementById('show-signup').addEventListener('click', (e) => {
-            e.preventDefault();
-            this.toggleAuthForms('signup');
-        });
+        document.getElementById('show-signup').addEventListener('click', (e) => { e.preventDefault(); this.toggleAuthForms('signup'); });
+        document.getElementById('show-login').addEventListener('click', (e) => { e.preventDefault(); this.toggleAuthForms('login'); });
+        document.getElementById('login-form-element').addEventListener('submit', (e) => { e.preventDefault(); this.handleLogin(); });
+        document.getElementById('signup-form-element').addEventListener('submit', (e) => { e.preventDefault(); this.handleSignup(); });
+        document.getElementById('logout-btn').addEventListener('click', () => this.handleLogout());
 
-        document.getElementById('show-login').addEventListener('click', (e) => {
-            e.preventDefault();
-            this.toggleAuthForms('login');
-        });
-
-        // Auth form submissions
-        document.getElementById('login-form-element').addEventListener('submit', (e) => {
-            e.preventDefault();
-            this.handleLogin();
-        });
-
-        document.getElementById('signup-form-element').addEventListener('submit', (e) => {
-            e.preventDefault();
-            this.handleSignup();
-        });
-
-        // Logout
-        document.getElementById('logout-btn').addEventListener('click', () => {
-            this.handleLogout();
-        });
-
-        // Navigation
         document.querySelectorAll('.nav-item').forEach(item => {
-            item.addEventListener('click', () => {
-                const section = item.dataset.section;
-                this.showSection(section);
-            });
+            item.addEventListener('click', () => this.showSection(item.dataset.section));
         });
 
-        // Quick actions
-        document.getElementById('quick-add-income').addEventListener('click', () => {
-            this.openTransactionModal('income');
-        });
+        // Quick actions & Add buttons
+        document.getElementById('quick-add-income').addEventListener('click', () => this.openTransactionModal('income'));
+        document.getElementById('quick-add-expense').addEventListener('click', () => this.openTransactionModal('expense'));
+        document.getElementById('add-transaction-btn').addEventListener('click', () => this.openTransactionModal());
+        document.getElementById('add-budget-btn').addEventListener('click', () => this.openBudgetModal());
+        document.getElementById('add-recurring-btn').addEventListener('click', () => this.openRecurringModal()); // ADDED
+        document.getElementById('view-all-transactions').addEventListener('click', () => this.showSection('transactions'));
 
-        document.getElementById('quick-add-expense').addEventListener('click', () => {
-            this.openTransactionModal('expense');
-        });
+        // Modal close/cancel buttons
+        ['close-modal', 'cancel-transaction'].forEach(id => document.getElementById(id).addEventListener('click', () => this.closeTransactionModal()));
+        ['close-budget-modal', 'cancel-budget'].forEach(id => document.getElementById(id).addEventListener('click', () => this.closeBudgetModal()));
+        ['close-recurring-modal', 'cancel-recurring'].forEach(id => document.getElementById(id).addEventListener('click', () => this.closeRecurringModal())); // ADDED
 
-        document.getElementById('add-transaction-btn').addEventListener('click', () => {
-            this.openTransactionModal();
-        });
-
-        document.getElementById('view-all-transactions').addEventListener('click', () => {
-            this.showSection('transactions');
-        });
-
-        // Modal controls
-        document.getElementById('close-modal').addEventListener('click', () => {
-            this.closeTransactionModal();
-        });
-
-        document.getElementById('cancel-transaction').addEventListener('click', () => {
-            this.closeTransactionModal();
-        });
-
-        document.getElementById('transaction-form').addEventListener('submit', (e) => {
-            e.preventDefault();
-            this.handleTransactionSubmit();
-        });
+        // Form submissions
+        document.getElementById('transaction-form').addEventListener('submit', (e) => { e.preventDefault(); this.handleTransactionSubmit(); });
+        document.getElementById('budget-form').addEventListener('submit', (e) => { e.preventDefault(); this.handleBudgetSubmit(); });
+        document.getElementById('recurring-form').addEventListener('submit', (e) => { e.preventDefault(); this.handleRecurringSubmit(); }); // ADDED
 
         // Filters
-        document.getElementById('apply-filters').addEventListener('click', () => {
-            this.applyFilters();
-        });
+        document.getElementById('apply-filters').addEventListener('click', () => this.applyFilters());
+        document.getElementById('clear-filters').addEventListener('click', () => this.clearFilters());
+        document.getElementById('apply-budget-filters').addEventListener('click', () => this.loadBudgets());
+        document.getElementById('apply-recurring-filters').addEventListener('click', () => this.loadRecurringTransactions()); // ADDED
 
-        document.getElementById('clear-filters').addEventListener('click', () => {
-            this.clearFilters();
-        });
+        // Modal outside click
+        document.getElementById('transaction-modal').addEventListener('click', (e) => { if (e.target.id === 'transaction-modal') this.closeTransactionModal(); });
+        document.getElementById('budget-modal').addEventListener('click', (e) => { if (e.target.id === 'budget-modal') this.closeBudgetModal(); });
+        document.getElementById('recurring-modal').addEventListener('click', (e) => { if (e.target.id === 'recurring-modal') this.closeRecurringModal(); }); // ADDED
 
-        // Close modal when clicking outside
-        document.getElementById('transaction-modal').addEventListener('click', (e) => {
-            if (e.target.id === 'transaction-modal') {
-                this.closeTransactionModal();
-            }
-        });
-
-        // Update modal categories when transaction type changes
-        document.getElementById('transaction-type').addEventListener('change', () => {
-            this.updateModalCategories();
-        });
+        document.getElementById('transaction-type').addEventListener('change', () => this.updateModalCategories());
     }
 
     toggleAuthForms(form) {
-        const loginForm = document.getElementById('login-form');
-        const signupForm = document.getElementById('signup-form');
-
-        if (form === 'signup') {
-            loginForm.classList.add('hidden');
-            signupForm.classList.remove('hidden');
-        } else {
-            signupForm.classList.add('hidden');
-            loginForm.classList.remove('hidden');
-        }
+        document.getElementById('login-form').classList.toggle('hidden', form === 'signup');
+        document.getElementById('signup-form').classList.toggle('hidden', form !== 'signup');
     }
 
-    async handleLogin() {
-        const username = document.getElementById('login-username').value;
-        const password = document.getElementById('login-password').value;
-
+    async handleApiAuth(endpoint, body) {
         try {
-            const response = await fetch('/api/auth/login', {
+            const response = await fetch(endpoint, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ username, password }),
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
             });
-
             const data = await response.json();
-
             if (response.ok) {
                 this.currentUser = data.user;
-                this.showMessage('Login successful!', 'success');
+                this.showMessage(data.message || 'Success!', 'success');
                 await this.showMainApp();
             } else {
-                this.showMessage(data.error || 'Login failed', 'error');
+                this.showMessage(data.error || 'Operation failed', 'error');
             }
         } catch (error) {
-            console.error('Login error:', error);
-            this.showMessage('Login failed. Please try again.', 'error');
+            console.error('Auth error:', error);
+            this.showMessage('An error occurred. Please try again.', 'error');
         }
     }
 
-    async handleSignup() {
+    handleLogin() {
+        const username = document.getElementById('login-username').value;
+        const password = document.getElementById('login-password').value;
+        this.handleApiAuth('/api/auth/login', { username, password });
+    }
+
+    handleSignup() {
         const username = document.getElementById('signup-username').value;
         const email = document.getElementById('signup-email').value;
         const password = document.getElementById('signup-password').value;
-
-        try {
-            const response = await fetch('/api/auth/signup', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ username, email, password }),
-            });
-
-            const data = await response.json();
-
-            if (response.ok) {
-                this.currentUser = data.user;
-                this.showMessage('Account created successfully!', 'success');
-                await this.showMainApp();
-            } else {
-                this.showMessage(data.error || 'Signup failed', 'error');
-            }
-        } catch (error) {
-            console.error('Signup error:', error);
-            this.showMessage('Signup failed. Please try again.', 'error');
-        }
+        this.handleApiAuth('/api/auth/signup', { username, email, password });
     }
 
     async handleLogout() {
@@ -240,31 +149,23 @@ class MoneyManager {
     }
 
     showSection(sectionName) {
-        // Update navigation
         document.querySelectorAll('.nav-item').forEach(item => {
-            item.classList.remove('active');
+            item.classList.toggle('active', item.dataset.section === sectionName);
         });
-        document.querySelector(`[data-section="${sectionName}"]`).classList.add('active');
-
-        // Show section
         document.querySelectorAll('.content-section').forEach(section => {
-            section.classList.remove('active');
+            section.classList.toggle('active', section.id === `${sectionName}-section`);
         });
-        document.getElementById(`${sectionName}-section`).classList.add('active');
 
-        // Load section-specific data
-        if (sectionName === 'transactions') {
-            this.loadTransactions();
-        } else if (sectionName === 'reports') {
-            this.loadReports();
-        }
+        if (sectionName === 'transactions') this.loadTransactions();
+        else if (sectionName === 'reports') this.loadReports();
+        else if (sectionName === 'budgets') this.loadBudgets();
+        else if (sectionName === 'recurring') this.loadRecurringTransactions(); // ADDED
     }
 
     async loadCategories() {
         try {
             const response = await fetch('/api/categories');
-            const categories = await response.json();
-            this.categories = categories;
+            this.categories = await response.json();
             this.populateCategorySelects();
         } catch (error) {
             console.error('Failed to load categories:', error);
@@ -272,18 +173,9 @@ class MoneyManager {
     }
 
     populateCategorySelects() {
-        const selects = [
-            document.getElementById('transaction-category'),
-            document.getElementById('filter-category')
-        ];
-
+        const selects = document.querySelectorAll('#transaction-category, #filter-category, #budget-category, #recurring-category');
         selects.forEach(select => {
-            // Clear existing options (except first one)
-            while (select.children.length > 1) {
-                select.removeChild(select.lastChild);
-            }
-
-            // Add category options
+            while (select.children.length > 1) select.removeChild(select.lastChild);
             this.categories.forEach(category => {
                 const option = document.createElement('option');
                 option.value = category.id;
@@ -297,18 +189,12 @@ class MoneyManager {
         try {
             const response = await fetch('/api/dashboard');
             const data = await response.json();
-
-            // Update balance cards
             document.getElementById('current-balance').textContent = this.formatCurrency(data.balance);
             document.getElementById('total-income').textContent = this.formatCurrency(data.total_income);
             document.getElementById('total-expense').textContent = this.formatCurrency(data.total_expense);
-
-            // Update recent transactions
             this.displayRecentTransactions(data.recent_transactions);
-
-            // Update spending chart
             this.updateSpendingChart(data.category_spending);
-
+            this.updateCategoryChart(data.category_spending); // For reports page
         } catch (error) {
             console.error('Failed to load dashboard data:', error);
             this.showMessage('Failed to load dashboard data', 'error');
@@ -316,157 +202,116 @@ class MoneyManager {
     }
 
     displayRecentTransactions(transactions) {
-        const container = document.getElementById('recent-transactions-list');
-        
-        if (transactions.length === 0) {
-            container.innerHTML = `
-                <div class="empty-state">
-                    <i class="fas fa-receipt"></i>
-                    <h3>No transactions yet</h3>
-                    <p>Start by adding your first transaction</p>
-                </div>
-            `;
-            return;
-        }
-
-        container.innerHTML = transactions.map(transaction => `
-            <div class="transaction-item ${transaction.transaction_type}">
-                <div class="transaction-info">
-                    <div class="transaction-icon">
-                        <i class="fas fa-${transaction.transaction_type === 'income' ? 'arrow-up' : 'arrow-down'}"></i>
-                    </div>
-                    <div class="transaction-details">
-                        <h4>${transaction.description || 'No description'}</h4>
-                        <p>${transaction.category_name || 'No category'}</p>
-                    </div>
-                </div>
-                <div class="transaction-amount">
-                    <div class="amount">${transaction.transaction_type === 'income' ? '+' : '-'}${this.formatCurrency(transaction.amount)}</div>
-                    <div class="date">${this.formatDate(transaction.date)}</div>
-                </div>
-            </div>
-        `).join('');
+        this.renderItems('recent-transactions-list', transactions, this.renderTransactionItem, 'No recent transactions.');
     }
 
     async loadTransactions() {
         try {
             const response = await fetch('/api/transactions');
-            const transactions = await response.json();
-            this.transactions = transactions;
-            this.displayTransactions(transactions);
+            this.transactions = await response.json();
+            this.displayTransactions(this.transactions);
         } catch (error) {
             console.error('Failed to load transactions:', error);
-            this.showMessage('Failed to load transactions', 'error');
         }
     }
 
     displayTransactions(transactions) {
-        const container = document.getElementById('transactions-list');
-        
-        if (transactions.length === 0) {
-            container.innerHTML = `
-                <div class="empty-state">
-                    <i class="fas fa-receipt"></i>
-                    <h3>No transactions found</h3>
-                    <p>Add some transactions to see them here</p>
-                </div>
-            `;
-            return;
-        }
-
-        container.innerHTML = transactions.map(transaction => `
-            <div class="transaction-item ${transaction.transaction_type}">
-                <div class="transaction-info">
-                    <div class="transaction-icon">
-                        <i class="fas fa-${transaction.transaction_type === 'income' ? 'arrow-up' : 'arrow-down'}"></i>
-                    </div>
-                    <div class="transaction-details">
-                        <h4>${transaction.description || 'No description'}</h4>
-                        <p>${transaction.category_name || 'No category'} • ${this.formatDate(transaction.date)}</p>
-                    </div>
-                </div>
-                <div class="transaction-amount">
-                    <div class="amount">${transaction.transaction_type === 'income' ? '+' : '-'}${this.formatCurrency(transaction.amount)}</div>
-                </div>
-                <div class="transaction-actions">
-                    <button class="action-btn-small" onclick="app.editTransaction(${transaction.id})" title="Edit">
-                        <i class="fas fa-edit"></i>
-                    </button>
-                    <button class="action-btn-small" onclick="app.deleteTransaction(${transaction.id})" title="Delete">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </div>
-            </div>
-        `).join('');
+        this.renderItems('transactions-list', transactions, this.renderTransactionItem, 'No transactions found.');
     }
 
+    // Modal Management
     openTransactionModal(type = '') {
         this.currentEditingTransaction = null;
         document.getElementById('modal-title').textContent = 'Add Transaction';
         document.getElementById('transaction-form').reset();
-        
-        if (type) {
-            document.getElementById('transaction-type').value = type;
-        }
-        
-        // Set today's date as default
-        document.getElementById('transaction-date').value = new Date().toISOString().split('T')[0];
-        this.updateModalCategories(); // Update categories based on default/selected type
-        
+        if (type) document.getElementById('transaction-type').value = type;
+        document.getElementById('transaction-date').valueAsDate = new Date();
+        this.updateModalCategories();
         document.getElementById('transaction-modal').classList.remove('hidden');
     }
 
     closeTransactionModal() {
         document.getElementById('transaction-modal').classList.add('hidden');
-        this.currentEditingTransaction = null;
     }
+
+    openBudgetModal(budget = null) {
+        document.getElementById('budget-form').reset();
+        this.currentEditingBudget = budget ? budget.id : null;
+        document.getElementById('budget-modal-title').textContent = budget ? 'Edit Budget' : 'Add Budget';
+        
+        if (budget) {
+            document.getElementById('budget-category').value = budget.category_id;
+            document.getElementById('budget-amount').value = budget.amount;
+            document.getElementById('budget-month-input').value = budget.budget_month;
+        } else {
+            document.getElementById('budget-month-input').value = new Date().toISOString().slice(0, 7);
+        }
+        document.getElementById('budget-modal').classList.remove('hidden');
+    }
+
+    closeBudgetModal() {
+        document.getElementById('budget-modal').classList.add('hidden');
+    }
+
+    openRecurringModal(item = null) {
+        document.getElementById('recurring-form').reset();
+        this.currentEditingRecurring = item ? item.id : null;
+        document.getElementById('recurring-modal-title').textContent = item ? 'Edit Recurring' : 'Add Recurring';
+
+        if (item) {
+            document.getElementById('recurring-description').value = item.description;
+            document.getElementById('recurring-amount').value = item.amount;
+            document.getElementById('recurring-type').value = item.transaction_type;
+            document.getElementById('recurring-category').value = item.category_id || '';
+            document.getElementById('recurring-frequency').value = item.frequency;
+            document.getElementById('recurring-interval').value = item.interval;
+            document.getElementById('recurring-start-date').value = item.start_date;
+            document.getElementById('recurring-end-date').value = item.end_date || '';
+        } else {
+            document.getElementById('recurring-start-date').valueAsDate = new Date();
+        }
+        document.getElementById('recurring-modal').classList.remove('hidden');
+    }
+
+    closeRecurringModal() {
+        document.getElementById('recurring-modal').classList.add('hidden');
+    }
+
 
     updateModalCategories() {
-        const transactionTypeSelect = document.getElementById('transaction-type');
+        const type = document.getElementById('transaction-type').value;
         const categorySelect = document.getElementById('transaction-category');
-        const selectedType = transactionTypeSelect.value;
+        const currentVal = categorySelect.value;
+        
+        while (categorySelect.children.length > 1) categorySelect.removeChild(categorySelect.lastChild);
 
-        const currentCategoryId = categorySelect.value;
-
-        // Clear existing options (except the first "Select Category" option)
-        while (categorySelect.children.length > 1) {
-            categorySelect.removeChild(categorySelect.lastChild);
+        const incomeCats = ['Salary'];
+        let filtered = this.categories;
+        if (type === 'income') {
+            filtered = this.categories.filter(c => incomeCats.includes(c.name) || c.name === 'Other');
+        } else if (type === 'expense') {
+            filtered = this.categories.filter(c => !incomeCats.includes(c.name));
         }
-
-        let categoriesToShow = [];
-        const incomeCategoryNames = ['Salary'];
-        const generalCategoryNames = ['Other'];
-
-        if (selectedType === 'income') {
-            categoriesToShow = this.categories.filter(cat => 
-                incomeCategoryNames.includes(cat.name) || generalCategoryNames.includes(cat.name)
-            );
-        } else if (selectedType === 'expense') {
-            categoriesToShow = this.categories.filter(cat => 
-                !incomeCategoryNames.includes(cat.name)
-            );
-        } else {
-            // If no type or an unknown type is selected, show all categories
-            categoriesToShow = [...this.categories];
-        }
-
-        categoriesToShow.forEach(category => {
-            const option = document.createElement('option');
-            option.value = category.id;
-            option.textContent = category.name;
-            categorySelect.appendChild(option);
+        
+        filtered.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.id;
+            opt.textContent = c.name;
+            categorySelect.appendChild(opt);
         });
 
-        // Try to re-select the previously selected category if it's still in the list
-        if (categoriesToShow.some(cat => cat.id.toString() === currentCategoryId)) {
-            categorySelect.value = currentCategoryId;
-        } else {
-            categorySelect.value = ""; // Default to "Select Category"
+        if (filtered.some(c => c.id.toString() === currentVal)) {
+            categorySelect.value = currentVal;
         }
     }
 
+    // Form Submissions
     async handleTransactionSubmit() {
-        const formData = {
+        const isEditing = !!this.currentEditingTransaction;
+        const url = isEditing ? `/api/transactions/${this.currentEditingTransaction}` : '/api/transactions';
+        const method = isEditing ? 'PUT' : 'POST';
+
+        const body = {
             amount: parseFloat(document.getElementById('transaction-amount').value),
             transaction_type: document.getElementById('transaction-type').value,
             category_id: document.getElementById('transaction-category').value || null,
@@ -475,114 +320,134 @@ class MoneyManager {
         };
 
         try {
-            let response;
-            if (this.currentEditingTransaction) {
-                response = await fetch(`/api/transactions/${this.currentEditingTransaction}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(formData)
-                });
-            } else {
-                response = await fetch('/api/transactions', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(formData)
-                });
-            }
-
+            const response = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
             const data = await response.json();
-
             if (response.ok) {
-                this.showMessage(
-                    this.currentEditingTransaction ? 'Transaction updated!' : 'Transaction added!', 
-                    'success'
-                );
+                this.showMessage(data.message || 'Success!', 'success');
                 this.closeTransactionModal();
-                await this.loadDashboardData();
-                if (document.getElementById('transactions-section').classList.contains('active')) {
-                    await this.loadTransactions();
-                }
+                this.loadDashboardData();
+                if (document.getElementById('transactions-section').classList.contains('active')) this.loadTransactions();
             } else {
-                this.showMessage(data.error || 'Failed to save transaction', 'error');
+                this.showMessage(data.error || 'Failed.', 'error');
             }
         } catch (error) {
-            console.error('Transaction submit error:', error);
-            this.showMessage('Failed to save transaction', 'error');
+            this.showMessage('Operation failed.', 'error');
         }
     }
 
+    async handleBudgetSubmit() {
+        const isEditing = !!this.currentEditingBudget;
+        const url = isEditing ? `/api/budgets/${this.currentEditingBudget}` : '/api/budgets';
+        const method = isEditing ? 'PUT' : 'POST';
+
+        const body = {
+            category_id: document.getElementById('budget-category').value,
+            amount: parseFloat(document.getElementById('budget-amount').value),
+            budget_month_str: document.getElementById('budget-month-input').value,
+            period: 'monthly'
+        };
+
+        if (!body.category_id || isNaN(body.amount) || !body.budget_month_str) {
+            this.showMessage('Please fill all required fields.', 'error');
+            return;
+        }
+
+        try {
+            const response = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            const data = await response.json();
+            if (response.ok) {
+                this.showMessage(data.message, 'success');
+                this.closeBudgetModal();
+                this.loadBudgets();
+            } else {
+                this.showMessage(data.error, 'error');
+            }
+        } catch (error) {
+            this.showMessage('Operation failed.', 'error');
+        }
+    }
+
+    async handleRecurringSubmit() {
+        const isEditing = !!this.currentEditingRecurring;
+        const url = isEditing ? `/api/recurring-transactions/${this.currentEditingRecurring}` : '/api/recurring-transactions';
+        const method = isEditing ? 'PUT' : 'POST';
+
+        const body = {
+            description: document.getElementById('recurring-description').value,
+            amount: parseFloat(document.getElementById('recurring-amount').value),
+            transaction_type: document.getElementById('recurring-type').value,
+            category_id: document.getElementById('recurring-category').value || null,
+            frequency: document.getElementById('recurring-frequency').value,
+            interval: parseInt(document.getElementById('recurring-interval').value),
+            start_date_str: document.getElementById('recurring-start-date').value,
+            end_date_str: document.getElementById('recurring-end-date').value || null,
+        };
+        
+        try {
+            const response = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            const data = await response.json();
+            if (response.ok) {
+                this.showMessage(data.message, 'success');
+                this.closeRecurringModal();
+                this.loadRecurringTransactions();
+            } else {
+                this.showMessage(data.error, 'error');
+            }
+        } catch (error) {
+            this.showMessage('Operation failed.', 'error');
+        }
+    }
+
+    // Edit/Delete
     async editTransaction(id) {
         try {
             const response = await fetch(`/api/transactions/${id}`);
+            if (!response.ok) throw new Error('Failed to fetch transaction');
             const transaction = await response.json();
-
-            if (response.ok) {
-                this.currentEditingTransaction = id;
-                document.getElementById('modal-title').textContent = 'Edit Transaction';
-                
-                // Populate form
-                document.getElementById('transaction-amount').value = transaction.amount;
-                document.getElementById('transaction-type').value = transaction.transaction_type;
-                document.getElementById('transaction-category').value = transaction.category_id || '';
-                document.getElementById('transaction-date').value = transaction.date;
-                document.getElementById('transaction-description').value = transaction.description || '';
-                
-                this.updateModalCategories(); // Ensure category dropdown is correctly filtered
-                document.getElementById('transaction-modal').classList.remove('hidden');
-            } else {
-                this.showMessage('Failed to load transaction', 'error');
-            }
+            this.currentEditingTransaction = id;
+            document.getElementById('modal-title').textContent = 'Edit Transaction';
+            document.getElementById('transaction-amount').value = transaction.amount;
+            document.getElementById('transaction-type').value = transaction.transaction_type;
+            this.updateModalCategories(); // Update categories before setting value
+            document.getElementById('transaction-category').value = transaction.category_id || '';
+            document.getElementById('transaction-date').value = transaction.date;
+            document.getElementById('transaction-description').value = transaction.description || '';
+            document.getElementById('transaction-modal').classList.remove('hidden');
         } catch (error) {
-            console.error('Edit transaction error:', error);
             this.showMessage('Failed to load transaction', 'error');
         }
     }
 
     async deleteTransaction(id) {
-        if (!confirm('Are you sure you want to delete this transaction?')) {
-            return;
-        }
-
+        if (!confirm('Are you sure?')) return;
         try {
-            const response = await fetch(`/api/transactions/${id}`, {
-                method: 'DELETE'
-            });
-
+            const response = await fetch(`/api/transactions/${id}`, { method: 'DELETE' });
             if (response.ok) {
                 this.showMessage('Transaction deleted!', 'success');
-                await this.loadDashboardData();
-                if (document.getElementById('transactions-section').classList.contains('active')) {
-                    await this.loadTransactions();
-                }
+                this.loadDashboardData();
+                if (document.getElementById('transactions-section').classList.contains('active')) this.loadTransactions();
             } else {
                 this.showMessage('Failed to delete transaction', 'error');
             }
         } catch (error) {
-            console.error('Delete transaction error:', error);
             this.showMessage('Failed to delete transaction', 'error');
         }
     }
 
+    // Filtering
     async applyFilters() {
-        const filters = {
+        const params = new URLSearchParams({
             type: document.getElementById('filter-type').value,
             category_id: document.getElementById('filter-category').value,
             start_date: document.getElementById('filter-start-date').value,
             end_date: document.getElementById('filter-end-date').value
-        };
-
-        const params = new URLSearchParams();
-        Object.entries(filters).forEach(([key, value]) => {
-            if (value) params.append(key, value);
         });
-
+        const url = `/api/transactions?${params.toString().replace(/&[^=]+=&/g, '&').replace(/&[^=]+=$/, '')}`;
         try {
-            const response = await fetch(`/api/transactions?${params}`);
-            const transactions = await response.json();
-            this.displayTransactions(transactions);
+            const response = await fetch(url);
+            this.displayTransactions(await response.json());
         } catch (error) {
             console.error('Filter error:', error);
-            this.showMessage('Failed to apply filters', 'error');
         }
     }
 
@@ -594,85 +459,231 @@ class MoneyManager {
         this.loadTransactions();
     }
 
-    updateSpendingChart(categorySpending) {
+    // Budgets
+    async loadBudgets() {
+        let monthFilter = document.getElementById('filter-budget-month').value;
+        if (!monthFilter) {
+            monthFilter = new Date().toISOString().slice(0, 7);
+            document.getElementById('filter-budget-month').value = monthFilter;
+        }
+        try {
+            const response = await fetch(`/api/budgets/summary?month_year=${monthFilter}`);
+            const summary = await response.json();
+            this.displayBudgets(summary);
+        } catch (error) {
+            console.error('Failed to load budgets:', error);
+        }
+    }
+    
+    displayBudgets(budgets) {
+        this.renderItems('budgets-list', budgets, this.renderBudgetItem, 'No budgets for this period.');
+        document.querySelectorAll('.edit-budget-btn').forEach(btn => 
+            btn.addEventListener('click', (e) => this.editBudget(e.currentTarget.dataset.id, budgets)));
+        document.querySelectorAll('.delete-budget-btn').forEach(btn => 
+            btn.addEventListener('click', (e) => this.deleteBudget(e.currentTarget.dataset.id)));
+    }
+
+    editBudget(id, budgets) {
+        const budget = budgets.find(b => b.budget_id.toString() === id);
+        if (budget) {
+            this.openBudgetModal({
+                id: budget.budget_id,
+                category_id: budget.category_id,
+                amount: budget.budgeted_amount,
+                budget_month: budget.budget_month
+            });
+        }
+    }
+
+    async deleteBudget(id) {
+        if (!confirm('Are you sure?')) return;
+        try {
+            const response = await fetch(`/api/budgets/${id}`, { method: 'DELETE' });
+            if (response.ok) {
+                this.showMessage('Budget deleted!', 'success');
+                this.loadBudgets();
+            } else {
+                this.showMessage('Failed to delete budget', 'error');
+            }
+        } catch (error) {
+            this.showMessage('Failed to delete budget', 'error');
+        }
+    }
+
+    // Recurring Transactions (NEW)
+    async loadRecurringTransactions() {
+        const activeOnly = document.getElementById('filter-recurring-status').value;
+        try {
+            const response = await fetch(`/api/recurring-transactions?active_only=${activeOnly}`);
+            const items = await response.json();
+            this.displayRecurringTransactions(items);
+        } catch(e) {
+            console.error('Failed to load recurring txns', e);
+        }
+    }
+
+    displayRecurringTransactions(items) {
+        this.renderItems('recurring-list', items, this.renderRecurringItem, 'No recurring transactions found.');
+        document.querySelectorAll('.edit-recurring-btn').forEach(btn => 
+            btn.addEventListener('click', (e) => this.editRecurring(e.currentTarget.dataset.id, items)));
+        document.querySelectorAll('.delete-recurring-btn').forEach(btn => 
+            btn.addEventListener('click', (e) => this.deleteRecurring(e.currentTarget.dataset.id)));
+    }
+
+    editRecurring(id, items) {
+        const item = items.find(i => i.id.toString() === id);
+        if (item) this.openRecurringModal(item);
+    }
+
+    async deleteRecurring(id) {
+        if (!confirm('This will deactivate the recurring transaction. Continue?')) return;
+        try {
+            const response = await fetch(`/api/recurring-transactions/${id}`, { method: 'DELETE' });
+            if (response.ok) {
+                this.showMessage('Recurring transaction deactivated!', 'success');
+                this.loadRecurringTransactions();
+            } else {
+                this.showMessage('Failed to deactivate.', 'error');
+            }
+        } catch (error) {
+            this.showMessage('Operation failed.', 'error');
+        }
+    }
+
+    // Charting
+    updateSpendingChart(data) {
         const canvas = document.getElementById('spending-chart');
+        if (!canvas) return;
         const ctx = canvas.getContext('2d');
-        
-        // Clear canvas
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        
-        if (categorySpending.length === 0) {
+        if (this.spendingChart) this.spendingChart.destroy();
+        this.spendingChart = this.createBarChart(ctx, data);
+    }
+    updateCategoryChart(data) {
+        const canvas = document.getElementById('category-chart');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (this.categoryChart) this.categoryChart.destroy();
+        this.categoryChart = this.createBarChart(ctx, data);
+    }
+    
+    createBarChart(ctx, data) {
+         if (data.length === 0) {
+            ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
             ctx.fillStyle = '#666';
             ctx.font = '16px Arial';
             ctx.textAlign = 'center';
-            ctx.fillText('No spending data available', canvas.width / 2, canvas.height / 2);
+            ctx.fillText('No spending data available', ctx.canvas.width / 2, ctx.canvas.height / 2);
             return;
         }
 
-        // Simple bar chart
-        const maxAmount = Math.max(...categorySpending.map(item => item.amount));
-        const barWidth = canvas.width / categorySpending.length - 20;
-        const barMaxHeight = canvas.height - 60;
+        const maxAmount = Math.max(...data.map(item => item.amount));
+        const barWidth = ctx.canvas.width / data.length - 20;
+        const barMaxHeight = ctx.canvas.height - 60;
 
-        categorySpending.forEach((item, index) => {
+        data.forEach((item, index) => {
             const barHeight = (item.amount / maxAmount) * barMaxHeight;
             const x = index * (barWidth + 20) + 10;
-            const y = canvas.height - barHeight - 30;
-
-            // Draw bar
+            const y = ctx.canvas.height - barHeight - 30;
             ctx.fillStyle = `hsl(${index * 60}, 70%, 60%)`;
             ctx.fillRect(x, y, barWidth, barHeight);
-
-            // Draw label
             ctx.fillStyle = '#333';
             ctx.font = '12px Arial';
             ctx.textAlign = 'center';
-            ctx.fillText(item.category, x + barWidth / 2, canvas.height - 10);
-            
-            // Draw amount
+            ctx.fillText(item.category, x + barWidth / 2, ctx.canvas.height - 10);
             ctx.fillText(this.formatCurrency(item.amount), x + barWidth / 2, y - 5);
         });
     }
 
+
     async loadReports() {
-        // This would load more detailed analytics
-        // For now, we'll just update the charts with existing data
-        await this.loadDashboardData();
+        await this.loadDashboardData(); // For now, reports just reuses dashboard data
+    }
+    
+    // RENDER HELPERS
+    renderItems(containerId, items, renderer, emptyMessage) {
+        const container = document.getElementById(containerId);
+        container.innerHTML = '';
+        if (!items || items.length === 0) {
+            container.innerHTML = `<div class="empty-state"><p>${emptyMessage}</p></div>`;
+            return;
+        }
+        container.innerHTML = items.map(item => renderer.call(this, item)).join('');
     }
 
+    renderTransactionItem(t) {
+        const isIncome = t.transaction_type === 'income';
+        return `
+            <div class="transaction-item ${t.transaction_type}">
+                <div class="transaction-info">
+                    <div class="transaction-icon"><i class="fas fa-${isIncome ? 'arrow-up' : 'arrow-down'}"></i></div>
+                    <div>
+                        <h4>${t.description || 'No description'}</h4>
+                        <p>${t.category_name || 'Uncategorized'} &bull; ${this.formatDate(t.date)}</p>
+                    </div>
+                </div>
+                <div class="transaction-amount">${isIncome ? '+' : '-'}${this.formatCurrency(t.amount)}</div>
+                <div class="transaction-actions">
+                    <button class="action-btn-small" onclick="app.editTransaction(${t.id})"><i class="fas fa-edit"></i></button>
+                    <button class="action-btn-small" onclick="app.deleteTransaction(${t.id})"><i class="fas fa-trash"></i></button>
+                </div>
+            </div>`;
+    }
+
+    renderBudgetItem(b) {
+        const isOver = b.remaining_amount < 0;
+        return `
+            <div class="budget-item">
+                <div class="budget-info">
+                    <h4>${b.category_name} - <span style="font-weight:normal; font-size: 0.9em;">${this.formatMonthYear(b.budget_month)}</span></h4>
+                    <p>Budgeted: ${this.formatCurrency(b.budgeted_amount)} | Spent: ${this.formatCurrency(b.spent_amount)}</p>
+                    <progress value="${b.spent_amount}" max="${b.budgeted_amount}" class="${isOver ? 'overspent' : ''}"></progress>
+                    <p>Remaining: <span style="color:${isOver ? '#f44336' : '#4CAF50'}; font-weight: bold;">${this.formatCurrency(b.remaining_amount)}</span></p>
+                </div>
+                <div class="budget-actions">
+                    <button class="action-btn-small edit-budget-btn" data-id="${b.budget_id}"><i class="fas fa-edit"></i></button>
+                    <button class="action-btn-small delete-budget-btn" data-id="${b.budget_id}"><i class="fas fa-trash"></i></button>
+                </div>
+            </div>`;
+    }
+
+    renderRecurringItem(r) {
+        const statusClass = r.is_active ? 'active' : 'inactive';
+        return `
+            <div class="recurring-item ${statusClass}">
+                <div class="recurring-info">
+                    <h4>${r.description} (${r.transaction_type})</h4>
+                    <p>Amount: ${this.formatCurrency(r.amount)} | Category: ${r.category_name || 'N/A'}</p>
+                    <p>Schedule: Every ${r.interval} ${r.frequency} | Next Due: ${this.formatDate(r.next_due_date)}</p>
+                    <p>Status: <span class="status-${statusClass}">${r.is_active ? 'Active' : 'Inactive'}</span></p>
+                </div>
+                <div class="recurring-actions">
+                    <button class="action-btn-small edit-recurring-btn" data-id="${r.id}"><i class="fas fa-edit"></i></button>
+                    <button class="action-btn-small delete-recurring-btn" data-id="${r.id}"><i class="fas fa-power-off"></i></button>
+                </div>
+            </div>`;
+    }
+
+    // UTILITY HELPERS
     formatCurrency(amount) {
-        return new Intl.NumberFormat('en-IN', { // Changed from en-US
-            style: 'currency',
-            currency: 'INR' // Changed from USD
-        }).format(amount || 0); // Added fallback for amount
+        // FIX: Added fallback for null/undefined amount
+        return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(amount || 0);
     }
-
-    formatDate(dateString) {
-        return new Date(dateString).toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric'
-        });
+    formatDate(dateString) { return new Date(dateString).toLocaleDateString('en-GB', { year: 'numeric', month: 'short', day: 'numeric' }); }
+    formatMonthYear(monthYearStr) { // e.g., "2025-06"
+        if (!monthYearStr || !monthYearStr.includes('-')) return monthYearStr; // Fallback
+        const parts = monthYearStr.split('-');
+        if (parts.length !== 2) return monthYearStr; // Fallback for malformed string
+        const date = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, 1); // Month is 0-indexed
+        return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }); // e.g., "June 2025"
     }
-
     showMessage(message, type = 'success') {
         const container = document.getElementById('message-container');
-        const messageEl = document.createElement('div');
-        messageEl.className = `message ${type}`;
-        messageEl.textContent = message;
-        
-        container.appendChild(messageEl);
-        
-        // Remove message after 5 seconds
-        setTimeout(() => {
-            if (messageEl.parentNode) {
-                messageEl.parentNode.removeChild(messageEl);
-            }
-        }, 5000);
+        const msgEl = document.createElement('div');
+        msgEl.className = `message ${type}`;
+        msgEl.textContent = message;
+        container.appendChild(msgEl);
+        setTimeout(() => { if (msgEl.parentNode) msgEl.parentNode.removeChild(msgEl); }, 5000);
     }
 }
 
-// Initialize the app when DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
-    window.app = new MoneyManager();
-});
+document.addEventListener('DOMContentLoaded', () => { window.app = new MoneyManager(); });

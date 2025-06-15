@@ -5,33 +5,46 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from flask import Flask, send_from_directory
 from flask_cors import CORS
-from src.models.user import db
-from src.models.transaction import Transaction, Category
+from src.extensions import db # Import db from the new extensions.py
+
+
+# Now, import blueprints. These might import models, which in turn import 'db' from this file.
+# Since 'db' is defined above, this will work.
 from src.routes.user import user_bp
 from src.routes.auth import auth_bp
 from src.routes.transaction import transaction_bp
+from src.routes.budget import budget_bp # Import the new budget blueprint
+from src.routes.recurring_transaction import recurring_transaction_bp# Import new blueprint
 
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
 app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
+app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(os.path.dirname(__file__), 'database', 'app.db')}"
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db.init_app(app) # Initialize db with the Flask app instance
 
 # Enable CORS for all routes
 CORS(app)
 
 # Register blueprints
-app.register_blueprint(auth_bp, url_prefix='/api/auth')
+app.register_blueprint(auth_bp, url_prefix='/api/auth') # auth_bp handles user creation (signup)
 app.register_blueprint(user_bp, url_prefix='/api')
 app.register_blueprint(transaction_bp, url_prefix='/api')
-
-# Database configuration
-app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(os.path.dirname(__file__), 'database', 'app.db')}"
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-db.init_app(app)
+app.register_blueprint(budget_bp) # FIX: Removed redundant url_prefix. The prefix is already in the blueprint file.
+app.register_blueprint(recurring_transaction_bp) # FIX: Removed redundant url_prefix. The prefix is already in the blueprint file.
 
 # Create database tables and default categories
 with app.app_context():
+    # Import models here, after db is initialized and app_context is active,
+    # to ensure they are registered with the correct db instance.
+    from src.models.user import User
+    from src.models.transaction import Transaction, Category # Import Category here
+    from src.models.budget import Budget
+    from src.models.recurring_transaction import RecurringTransaction
+    
     db.create_all()
     
     # Create default categories if they don't exist
+    # Category model is now correctly in scope here.
     default_categories = [
         {'name': 'Food', 'description': 'Food and dining expenses'},
         {'name': 'Bills', 'description': 'Utility bills and recurring payments'},

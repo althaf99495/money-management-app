@@ -1,5 +1,6 @@
 from flask import Blueprint, jsonify, request, session
-from src.models.user import User, db
+from src.models.user import User
+from src.extensions import db # Import db from extensions.py
 from functools import wraps
 
 auth_bp = Blueprint('auth', __name__)
@@ -130,4 +131,3 @@ def check_auth():
             }), 200
     
     return jsonify({'authenticated': False}), 200
-

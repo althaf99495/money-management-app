@@ -1,3 +1,81 @@
+/* d:\money-management-app\src\static\styles.css (add these or similar) */
+
+/* Budgets Section */
+.budgets-list {
+    margin-top: 20px;
+    display: grid;
+    gap: 20px;
+}
+
+.budget-item {
+    background-color: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.budget-info {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+.budget-info h4 {
+    margin-top: 0;
+    margin-bottom: 8px;
+    color: #333;
+}
+
+.budget-info p {
+    font-size: 16px;
+    color: #444;
+    margin-bottom: 10px;
+    line-height: 1.6;
+}
+
+.budget-info progress {
+    width: 100%;
+    height: 10px;
+    border-radius: 5px;
+}
+
+.budget-info progress::-webkit-progress-bar {
+    background-color: #e0e0e0;
+    border-radius: 5px;
+}
+
+.budget-info progress::-webkit-progress-value {
+    background-color: #4CAF50; /* Green for good progress */
+    border-radius: 5px;
+    transition: width 0.3s ease-in-out;
+}
+.budget-info progress.overspent::-webkit-progress-value {
+    background-color: #f44336; /* Red for overspent */
+}
+.budget-info progress.overspent::-moz-progress-bar { /* Firefox */
+    background-color: #f44336;
+}
+.budget-info progress.overspent { /* General fallback for other browsers */
+    accent-color: #f44336; /* May style the whole bar or just the value part */
+}
+
+
+.budget-actions .action-btn-small {
+    margin-left: 10px;
+}
+
+/* Budget Modal (similar to transaction modal) */
+
+/* Filter for budget month */
+#filter-budget-month {
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 1em;
+}
 /* Reset and Base Styles */
 * {
     margin: 0;
@@ -749,3 +827,70 @@ body {
     margin-bottom: 20px;
 }
 
+/* Add to end of styles.css */
+
+/* Recurring Transactions Section */
+.recurring-list {
+    margin-top: 20px;
+    display: grid;
+    gap: 20px;
+}
+
+.recurring-item {
+    background-color: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-left: 4px solid #ccc; /* Default for inactive */
+}
+
+.recurring-item.active {
+    border-left-color: #4CAF50; /* Green for active */
+}
+
+.recurring-info {
+    flex: 1;
+}
+
+.recurring-info h4 {
+    margin-top: 0;
+    margin-bottom: 8px;
+    color: #333;
+}
+
+.recurring-info p {
+    font-size: 14px;
+    color: #555;
+    margin-bottom: 5px;
+}
+
+.status-active {
+    font-weight: bold;
+    color: #4CAF50;
+}
+
+.status-inactive {
+    font-weight: bold;
+    color: #f44336;
+}
+
+.recurring-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.recurring-actions .action-btn-small {
+    margin-left: 10px;
+}
+
+.form-group-inline {
+    display: flex;
+    gap: 20px;
+}
+
+.form-group-inline .form-group {
+    flex: 1;
+}
