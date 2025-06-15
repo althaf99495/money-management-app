@@ -7,6 +7,8 @@ class MoneyManager {
         this.transactions = [];
         this.currentEditingTransaction = null;
         this.currentEditingBudget = null;
+        this.currentEditingSavingsGoal = null; 
+        this.currentContributingGoal = null;
         this.currentEditingRecurring = null; // Added for recurring transactions
         
         this.init();
@@ -71,12 +73,16 @@ class MoneyManager {
         document.getElementById('quick-add-expense').addEventListener('click', () => this.openTransactionModal('expense'));
         document.getElementById('add-transaction-btn').addEventListener('click', () => this.openTransactionModal());
         document.getElementById('add-budget-btn').addEventListener('click', () => this.openBudgetModal());
+        document.getElementById('add-savings-goal-btn').addEventListener('click', () => this.openSavingsGoalModal());
         document.getElementById('add-recurring-btn').addEventListener('click', () => this.openRecurringModal()); // ADDED
         document.getElementById('view-all-transactions').addEventListener('click', () => this.showSection('transactions'));
 
         // Modal close/cancel buttons
         ['close-modal', 'cancel-transaction'].forEach(id => document.getElementById(id).addEventListener('click', () => this.closeTransactionModal()));
         ['close-budget-modal', 'cancel-budget'].forEach(id => document.getElementById(id).addEventListener('click', () => this.closeBudgetModal()));
+        ['close-savings-goal-modal', 'cancel-savings-goal'].forEach(id => document.getElementById(id).addEventListener('click', () => this.closeSavingsGoalModal()));
+        ['close-contribute-modal', 'cancel-contribute'].forEach(id => document.getElementById(id).addEventListener('click', () => this.closeContributeModal()));
+
         ['close-recurring-modal', 'cancel-recurring'].forEach(id => document.getElementById(id).addEventListener('click', () => this.closeRecurringModal())); // ADDED
 
         // Form submissions
@@ -84,6 +90,8 @@ class MoneyManager {
         document.getElementById('budget-form').addEventListener('submit', (e) => { e.preventDefault(); this.handleBudgetSubmit(); });
         document.getElementById('recurring-form').addEventListener('submit', (e) => { e.preventDefault(); this.handleRecurringSubmit(); }); // ADDED
 
+        document.getElementById('savings-goal-form').addEventListener('submit', (e) => { e.preventDefault(); this.handleSavingsGoalSubmit(); });
+        document.getElementById('contribute-form').addEventListener('submit', (e) => { e.preventDefault(); this.handleContributeSubmit(); });
         // Filters
         document.getElementById('apply-filters').addEventListener('click', () => this.applyFilters());
         document.getElementById('clear-filters').addEventListener('click', () => this.clearFilters());
@@ -93,6 +101,8 @@ class MoneyManager {
         // Modal outside click
         document.getElementById('transaction-modal').addEventListener('click', (e) => { if (e.target.id === 'transaction-modal') this.closeTransactionModal(); });
         document.getElementById('budget-modal').addEventListener('click', (e) => { if (e.target.id === 'budget-modal') this.closeBudgetModal(); });
+        document.getElementById('savings-goal-modal').addEventListener('click', (e) => { if (e.target.id === 'savings-goal-modal') this.closeSavingsGoalModal(); });
+        document.getElementById('contribute-modal').addEventListener('click', (e) => { if (e.target.id === 'contribute-modal') this.closeContributeModal(); });
         document.getElementById('recurring-modal').addEventListener('click', (e) => { if (e.target.id === 'recurring-modal') this.closeRecurringModal(); }); // ADDED
 
         document.getElementById('transaction-type').addEventListener('change', () => this.updateModalCategories());
@@ -160,6 +170,7 @@ class MoneyManager {
         else if (sectionName === 'reports') this.loadReports();
         else if (sectionName === 'budgets') this.loadBudgets();
         else if (sectionName === 'recurring') this.loadRecurringTransactions(); // ADDED
+        else if (sectionName === 'savings-goals') this.loadSavingsGoals();
     }
 
     async loadCategories() {
@@ -252,6 +263,42 @@ class MoneyManager {
     closeBudgetModal() {
         document.getElementById('budget-modal').classList.add('hidden');
     }
+
+    openSavingsGoalModal(goal = null) {
+        document.getElementById('savings-goal-form').reset();
+        this.currentEditingSavingsGoal = goal ? goal.id : null;
+        document.getElementById('savings-goal-modal-title').textContent = goal ? 'Edit Savings Goal' : 'Add Savings Goal';
+
+        if (goal) {
+            document.getElementById('savings-goal-name').value = goal.name;
+            document.getElementById('savings-goal-target-amount').value = goal.target_amount;
+            document.getElementById('savings-goal-current-amount').value = goal.current_amount;
+            document.getElementById('savings-goal-target-date').value = goal.target_date || '';
+            document.getElementById('savings-goal-description').value = goal.description || '';
+            document.getElementById('savings-goal-priority').value = goal.priority || 'medium';
+        }
+        document.getElementById('savings-goal-modal').classList.remove('hidden');
+    }
+
+    closeSavingsGoalModal() {
+        document.getElementById('savings-goal-modal').classList.add('hidden');
+    }
+
+    openContributeModal(goal) {
+        this.currentContributingGoal = goal;
+        document.getElementById('contribute-form').reset();
+        document.getElementById('contribute-modal-title').textContent = `Contribute to ${goal.name}`;
+        document.getElementById('contribute-goal-name-display').textContent = goal.name;
+        document.getElementById('contribute-current-amount-display').textContent = this.formatCurrency(goal.current_amount);
+        document.getElementById('contribute-target-amount-display').textContent = this.formatCurrency(goal.target_amount);
+        document.getElementById('contribute-modal').classList.remove('hidden');
+    }
+
+    closeContributeModal() {
+        document.getElementById('contribute-modal').classList.add('hidden');
+        this.currentContributingGoal = null;
+    }
+
 
     openRecurringModal(item = null) {
         document.getElementById('recurring-form').reset();
@@ -367,6 +414,61 @@ class MoneyManager {
         }
     }
 
+    async handleSavingsGoalSubmit() {
+        const isEditing = !!this.currentEditingSavingsGoal;
+        const url = isEditing ? `/api/savings-goals/${this.currentEditingSavingsGoal}` : '/api/savings-goals';
+        const method = isEditing ? 'PUT' : 'POST';
+
+        const body = {
+            name: document.getElementById('savings-goal-name').value,
+            target_amount: parseFloat(document.getElementById('savings-goal-target-amount').value),
+            current_amount: parseFloat(document.getElementById('savings-goal-current-amount').value) || 0.0,
+            target_date: document.getElementById('savings-goal-target-date').value || null,
+            description: document.getElementById('savings-goal-description').value || null,
+            priority: document.getElementById('savings-goal-priority').value,
+        };
+
+        if (!body.name || isNaN(body.target_amount)) {
+            this.showMessage('Goal Name and Target Amount are required.', 'error');
+            return;
+        }
+
+        try {
+            const response = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            const data = await response.json();
+            if (response.ok) {
+                this.showMessage(data.message, 'success');
+                this.closeSavingsGoalModal();
+                this.loadSavingsGoals();
+            } else {
+                this.showMessage(data.error, 'error');
+            }
+        } catch (error) {
+            this.showMessage('Operation failed.', 'error');
+        }
+    }
+
+    async handleContributeSubmit() {
+        if (!this.currentContributingGoal) return;
+
+        const amount = parseFloat(document.getElementById('contribute-amount').value);
+        if (isNaN(amount) || amount <= 0) {
+            this.showMessage('Please enter a valid positive amount to contribute.', 'error');
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/savings-goals/${this.currentContributingGoal.id}/contribute`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount })
+            });
+            const data = await response.json();
+            if (response.ok) {
+                this.showMessage(data.message, 'success');
+                this.closeContributeModal();
+                this.loadSavingsGoals(); // Refresh the list
+            } else { this.showMessage(data.error, 'error'); }
+        } catch (error) { this.showMessage('Contribution failed.', 'error'); }
+    }
     async handleRecurringSubmit() {
         const isEditing = !!this.currentEditingRecurring;
         const url = isEditing ? `/api/recurring-transactions/${this.currentEditingRecurring}` : '/api/recurring-transactions';
@@ -461,20 +563,35 @@ class MoneyManager {
 
     // Budgets
     async loadBudgets() {
-        let monthFilter = document.getElementById('filter-budget-month').value;
-        if (!monthFilter) {
-            monthFilter = new Date().toISOString().slice(0, 7);
-            document.getElementById('filter-budget-month').value = monthFilter;
+        const selectedMonth = document.getElementById('filter-budget-month').value; // e.g., "01" or ""
+        const selectedYear = document.getElementById('filter-budget-year').value;   // e.g., "2023" or ""
+        
+        let queryString = '';
+        // Only construct the query string if BOTH year and month are selected
+        if (selectedYear && selectedMonth) {
+            queryString = `?month_year=${selectedYear}-${selectedMonth}`;
         }
+        // If either is missing, queryString remains empty, and the backend defaults to the current month for summary.
+
+        const url = `/api/budgets/summary${queryString}`;
+        
         try {
-            const response = await fetch(`/api/budgets/summary?month_year=${monthFilter}`);
+            const response = await fetch(url);
+            if (!response.ok) {
+                const errorData = await response.json();
+                this.showMessage(errorData.error || `HTTP error ${response.status}`, 'error');
+                this.displayBudgets([]); // Clear or show empty state
+                return;
+            }
             const summary = await response.json();
             this.displayBudgets(summary);
         } catch (error) {
             console.error('Failed to load budgets:', error);
+            this.showMessage('Failed to load budgets. Check console for details.', 'error');
+            this.displayBudgets([]); // Clear or show empty state
         }
     }
-    
+
     displayBudgets(budgets) {
         this.renderItems('budgets-list', budgets, this.renderBudgetItem, 'No budgets for this period.');
         document.querySelectorAll('.edit-budget-btn').forEach(btn => 
@@ -510,6 +627,43 @@ class MoneyManager {
         }
     }
 
+    // Savings Goals (NEW)
+    async loadSavingsGoals() {
+        try {
+            const response = await fetch('/api/savings-goals');
+            const goals = await response.json();
+            this.displaySavingsGoals(goals);
+        } catch (e) {
+            console.error('Failed to load savings goals', e);
+            this.showMessage('Could not load savings goals.', 'error');
+        }
+    }
+
+    displaySavingsGoals(goals) {
+        this.renderItems('savings-goals-list', goals, this.renderSavingsGoalItem, 'No savings goals yet. Add one!');
+        document.querySelectorAll('.edit-savings-goal-btn').forEach(btn =>
+            btn.addEventListener('click', (e) => this.editSavingsGoal(e.currentTarget.dataset.id, goals)));
+        document.querySelectorAll('.delete-savings-goal-btn').forEach(btn =>
+            btn.addEventListener('click', (e) => this.deleteSavingsGoal(e.currentTarget.dataset.id)));
+        document.querySelectorAll('.contribute-savings-goal-btn').forEach(btn =>
+            btn.addEventListener('click', (e) => this.openContributeModal(goals.find(g => g.id.toString() === e.currentTarget.dataset.id))));
+    }
+
+    editSavingsGoal(id, goals) {
+        const goal = goals.find(g => g.id.toString() === id);
+        if (goal) this.openSavingsGoalModal(goal);
+    }
+
+    async deleteSavingsGoal(id) {
+        if (!confirm('Are you sure you want to delete this savings goal?')) return;
+        try {
+            const response = await fetch(`/api/savings-goals/${id}`, { method: 'DELETE' });
+            if (response.ok) {
+                this.showMessage('Savings goal deleted!', 'success');
+                this.loadSavingsGoals();
+            } else { this.showMessage('Failed to delete savings goal.', 'error'); }
+        } catch (error) { this.showMessage('Operation failed.', 'error'); }
+    }
     // Recurring Transactions (NEW)
     async loadRecurringTransactions() {
         const activeOnly = document.getElementById('filter-recurring-status').value;
@@ -644,6 +798,34 @@ class MoneyManager {
                     <button class="action-btn-small delete-budget-btn" data-id="${b.budget_id}"><i class="fas fa-trash"></i></button>
                 </div>
             </div>`;
+    }
+
+    renderSavingsGoalItem(goal) {
+        const progressPercent = goal.target_amount > 0 ? (goal.current_amount / goal.target_amount) * 100 : 0;
+        const isAchieved = goal.current_amount >= goal.target_amount;
+        const amountRemaining = goal.target_amount - goal.current_amount;
+        const priorityClass = `priority-${goal.priority}`;
+
+        return `
+            <div class="savings-goal-item ${isAchieved ? 'achieved' : ''} ${priorityClass}">
+                <div class="savings-goal-info">
+                    <h4>${goal.name} <span class="priority-text">(${goal.priority.charAt(0).toUpperCase() + goal.priority.slice(1)})</span> ${isAchieved ? '<i class="fas fa-check-circle achieved-icon"></i>' : ''}</h4>
+                    <p>Target: ${this.formatCurrency(goal.target_amount)} | Saved: ${this.formatCurrency(goal.current_amount)}</p>
+                    <p><strong>Remaining: ${this.formatCurrency(amountRemaining > 0 ? amountRemaining : 0)}</strong></p>
+                    <progress value="${goal.current_amount}" max="${goal.target_amount}"></progress>
+                    <p>Progress: ${progressPercent.toFixed(1)}% ${goal.target_date ? `| Target Date: ${this.formatDate(goal.target_date)}` : ''}</p>
+                    ${goal.description ? `<p class="description"><em>${goal.description}</em></p>` : ''}
+                </div>
+                
+                <div class="savings-goal-actions">
+                    <button class="action-btn-small contribute-savings-goal-btn" data-id="${goal.id}" title="Contribute">
+                        <i class="fas fa-donate"></i>
+                    </button>
+                    <button class="action-btn-small edit-savings-goal-btn" data-id="${goal.id}" title="Edit"><i class="fas fa-edit"></i></button>
+                    <button class="action-btn-small delete-savings-goal-btn" data-id="${goal.id}" title="Delete"><i class="fas fa-trash"></i></button>
+                </div>
+            </div>
+        `;
     }
 
     renderRecurringItem(r) {

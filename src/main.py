@@ -15,6 +15,7 @@ from src.routes.auth import auth_bp
 from src.routes.transaction import transaction_bp
 from src.routes.budget import budget_bp # Import the new budget blueprint
 from src.routes.recurring_transaction import recurring_transaction_bp# Import new blueprint
+from src.routes.savings_goal import savings_goal_bp # Import new blueprint
 
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
 app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
@@ -31,6 +32,7 @@ app.register_blueprint(user_bp, url_prefix='/api')
 app.register_blueprint(transaction_bp, url_prefix='/api')
 app.register_blueprint(budget_bp) # FIX: Removed redundant url_prefix. The prefix is already in the blueprint file.
 app.register_blueprint(recurring_transaction_bp) # FIX: Removed redundant url_prefix. The prefix is already in the blueprint file.
+app.register_blueprint(savings_goal_bp)
 
 # Create database tables and default categories
 with app.app_context():
@@ -40,6 +42,7 @@ with app.app_context():
     from src.models.transaction import Transaction, Category # Import Category here
     from src.models.budget import Budget
     from src.models.recurring_transaction import RecurringTransaction
+    from src.models.savings_goal import SavingsGoal
     
     db.create_all()
     

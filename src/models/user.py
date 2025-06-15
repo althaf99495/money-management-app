@@ -13,6 +13,7 @@ class User(db.Model):
     
     # Relationship with transactions
     transactions = db.relationship('Transaction', backref='user', lazy=True, cascade='all, delete-orphan')
+    savings_goals = db.relationship('SavingsGoal', backref='user', lazy='dynamic', cascade='all, delete-orphan')
 
     def __repr__(self):
         return f'<User {self.username}>'
